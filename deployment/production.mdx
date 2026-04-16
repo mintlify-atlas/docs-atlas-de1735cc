@@ -1,0 +1,98 @@
+---
+title: "Running Remote Power Button in production"
+description: "Harden rpb for internet use: add TLS via a reverse proxy or Cloudflare Tunnel, generate a strong secret, and review failed access logs in SQLite."
+---
+
+Once rpb is running on your Raspberry Pi, you have several decisions to make before exposing it to the internet: how to handle encryption, how to limit access, and how to monitor for unauthorized attempts. This page covers what rpb does natively and what you need to add around it.
+
+## The `-prod` flag
+
+rpb has two modes of operation controlled by the `-prod` flag:
+
+- **Without `-prod` (default):** rpb simulates button presses in software and logs activity, but never touches GPIO hardware. Useful for development and testing on a non-Pi machine.
+- **With `-prod`:** rpb drives the physical GPIO output pin to trigger the desktop's power button circuit.
+
+<Warning>
+  Always pass `-prod` in your production service or Compose file. Without it, rpb will appear to work — requests succeed and events are logged — but the desktop will never actually power on or off.
+</Warning>
+
+## Cloudflare proxy integration
+
+If you put rpb behind Cloudflare (either as a proxied DNS record or via Cloudflare Tunnel), rpb automatically reads two headers that Cloudflare injects:
+
+- `Cf-Connecting-Ip` — the requester's real IP address
+- `Cf-Ipcountry` — the requester's two-letter country code
+
+Both values are recorded in the `bad_access` table in SQLite whenever an authentication attempt fails. This lets you see where failed login attempts are coming from even when your origin is behind a proxy.
+
+<Note>
+  If you access rpb directly (no Cloudflare proxy), these headers won't be present and the IP/country columns in `bad_access` will be empty for failed attempts.
+</Note>
+
+## Access and startup logging
+
+rpb logs two categories of events to its SQLite database:
+
+| Table | Contents |
+|---|---|
+| `startup` | Timestamp, timeout, input pin, output pin, and whether `-prod` was active at each startup |
+| `bad_access` | Timestamp, attempted username, attempted password, IP address, and country for every failed authentication request |
+
+Review the `bad_access` table periodically to check for brute-force attempts:
+
+```bash
+sqlite3 rpb.db "SELECT * FROM bad_access ORDER BY timestamp DESC LIMIT 20;"
+```
+
+## Graceful shutdown
+
+rpb handles `SIGINT` and `SIGTERM` cleanly. When either signal is received:
+
+1. The HTTP server stops accepting new requests and waits up to 3 seconds for in-flight requests to finish.
+2. The SQLite database is closed.
+3. In `-prod` mode, the GPIO interface is released.
+
+This means `sudo systemctl stop rpb`, `docker compose down`, and Ctrl-C all shut down rpb cleanly without corrupting the database or leaving GPIO pins in an undefined state.
+
+## Security recommendations
+
+<Warning>
+  rpb does not support TLS natively. Do not expose it directly to the internet over plain HTTP. Use one of the options below to add encryption.
+</Warning>
+
+**Use a strong secret**
+
+`RPB_SECRET` is the only authentication mechanism. Generate a long random string:
+
+```bash
+openssl rand -base64 32
+```
+
+**Reverse proxy with HTTPS**
+
+Put rpb behind nginx or Caddy to terminate TLS before traffic reaches rpb:
+
+```bash
+# Example Caddy block
+rpb.yourdomain.com {
+    reverse_proxy localhost:5000
+}
+```
+
+Caddy provisions a Let's Encrypt certificate automatically.
+
+**Cloudflare Tunnel (zero-trust, no open ports)**
+
+Cloudflare Tunnel connects your Raspberry Pi to Cloudflare's edge without opening any inbound firewall ports:
+
+```bash
+cloudflared tunnel --url http://localhost:5000
+```
+
+<Tip>
+  Cloudflare Tunnel is the lowest-friction option if you already use Cloudflare. It also enables the IP and country logging described above.
+</Tip>
+
+**Review failed access logs**
+
+The `bad_access` table records the exact username and password submitted in every failed request. Review it after exposing rpb externally to detect credential-stuffing or brute-force activity.

@@ -1,0 +1,93 @@
+---
+title: "Authentication and access control for rpb"
+description: "How rpb uses HTTP Basic Auth with a shared secret, how to set credentials, pass them in requests, and what happens when authentication fails."
+---
+
+rpb protects every endpoint with HTTP Basic Auth. There is no user database — authentication is based on a single shared secret that you configure at startup. The username field is not validated for authentication purposes; it is recorded in press history as the "source" so you can see who (or which client) triggered each action. Any username works.
+
+## Setting the secret
+
+You must supply the secret before starting the server. rpb accepts it in two ways:
+
+<Steps>
+  <Step title="Use the -secret flag">
+    Pass the secret directly on the command line:
+
+    ```bash
+    ./rpb -prod -secret your-strong-secret-here
+    ```
+  </Step>
+  <Step title="Use the RPB_SECRET environment variable">
+    Set the variable in your environment or `.env` file. rpb falls back to this if `-secret` is not passed:
+
+    ```bash .env
+    RPB_SECRET=your-strong-secret-here
+    ```
+
+    The CLI flag takes priority if both are provided.
+  </Step>
+</Steps>
+
+<Warning>
+  The server exits immediately on startup if the secret is empty or still set to the placeholder value `<INSERT SECRET HERE>`. Make sure to replace it before running.
+</Warning>
+
+## Passing credentials in requests
+
+Use standard HTTP Basic Auth. The username can be anything — choose something descriptive so press history is readable.
+
+<CodeGroup>
+
+```bash curl
+curl -u myname:your-strong-secret-here http://<pi-ip>:5000/status
+```
+
+```bash Authorization header
+curl -H "Authorization: Basic $(echo -n 'myname:your-strong-secret-here' | base64)" \
+  http://<pi-ip>:5000/status
+```
+
+</CodeGroup>
+
+If you open rpb in a browser, the browser will display its built-in credential prompt on the first visit. Enter any username and your secret as the password.
+
+## Successful authentication
+
+On a successful request, rpb includes a `Press-Timeout` response header that tells the client the maximum duration (in seconds) a button press will be held before auto-release:
+
+```
+Press-Timeout: 20.000000.2f
+```
+
+<Note>
+  The `Press-Timeout` header value is formatted with the Go format string `%f.2f`, which produces a literal `.2f` suffix after the floating-point number (e.g. `20.000000.2f` for a 20-second timeout). This is a quirk of the current implementation.
+</Note>
+
+## Failed authentication
+
+If credentials are missing or the password is wrong, rpb responds with:
+
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Basic realm="restricted", charset="UTF-8"
+```
+
+Failed attempts are logged to the `bad_access` table in the SQLite database. Each record captures:
+
+- Timestamp
+- Client IP address
+- Country (populated from the `Cf-Ipcountry` header when traffic passes through Cloudflare)
+- Username attempted
+- Password attempted
+
+<Note>
+  The country field is only populated when rpb sits behind Cloudflare. If you are accessing it directly, the field will be empty.
+</Note>
+
+## How the secret is compared
+
+rpb hashes both the configured secret and the incoming password with SHA-256 and compares them using a constant-time comparison. This prevents timing attacks.
+
+<Warning>
+  Do not use a short or guessable secret. Because the service may be exposed to the internet, a weak secret puts your desktop's power button under remote control of anyone who can guess it. Failed attempts are logged, but prevention is better than detection.
+</Warning>

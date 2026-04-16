@@ -1,0 +1,94 @@
+---
+title: "Hardware setup for Remote Power Button"
+description: "Wire a relay module and status LED to your Raspberry Pi GPIO pins so rpb can control your desktop's power button and read its power state."
+---
+
+rpb uses two GPIO connections on your Raspberry Pi: one output pin that drives a relay to simulate pressing the power button, and one input pin that reads the desktop's power LED line to determine whether the machine is on or off. This page covers what you need, how the circuit works, and how to make the connections.
+
+## What you need
+
+- A Raspberry Pi (any model with standard 40-pin GPIO headers)
+- A relay module with at least one channel (3.3 V or 5 V signal compatible)
+- Jumper wires (female-to-female and female-to-male as needed)
+- A desktop motherboard with an exposed **power button header** (F\_PANEL or similar)
+- Access to the **power LED header** on the same connector block
+
+<Info>
+Most ATX desktop motherboards expose both the power button and power LED on a 2×5 or 2×4 pin header near the bottom of the board. Consult your motherboard manual to identify the correct pins.
+</Info>
+
+## How it works
+
+rpb uses the [`go-rpio`](https://github.com/stianeikeland/go-rpio) library to control GPIO directly from Go without requiring external tools.
+
+**Output — relay control (default: GPIO 15, BCM)**
+
+When you call `POST /press`, rpb drives the output pin high. This activates the relay, which closes the circuit across your power button header — identical to physically pressing the power button. When you call `POST /release`, the pin goes low and the relay opens.
+
+**Input — power state detection (default: GPIO 14, BCM)**
+
+The input pin is configured with a software pull-up resistor using `rpio.PullUp`. No external resistor is required. When the desktop is on, the power LED line pulls the pin low; when the desktop is off, the pull-up holds the pin high. rpb reads this to report the current power state from `GET /status`.
+
+<Note>
+The pull-up is applied in software by the `go-rpio` library at startup. You do not need to add an external pull-up resistor on the input wire.
+</Note>
+
+## Wiring
+
+Connect the components as described below.
+
+**Relay module**
+
+| Relay pin | Connect to |
+|-----------|------------|
+| Signal (IN) | GPIO 15 (BCM) on the Pi |
+| VCC | 5 V pin on the Pi (pin 2 or 4) |
+| GND | GND pin on the Pi |
+| Common (COM) | One pin of the power button header on the motherboard |
+| Normally open (NO) | Other pin of the power button header on the motherboard |
+
+**Status LED input**
+
+| Wire | Connect to |
+|------|------------|
+| Power LED + (from motherboard header) | GPIO 14 (BCM) on the Pi |
+| Power LED – (from motherboard header) | GND pin on the Pi |
+
+<Warning>
+Disconnect your desktop from mains power before touching the motherboard headers. Even with the machine off, some motherboards keep the 5 V standby rail active when plugged in.
+</Warning>
+
+## Using non-default GPIO pins
+
+If you need to use different pins, pass the `-input` and `-output` flags when starting rpb. For example, to use GPIO 17 for input and GPIO 27 for output:
+
+```bash
+./rpb -prod -input 17 -output 27
+```
+
+When using Docker Compose, add these flags to the `command` field in `docker-compose.yml`:
+
+```yaml
+command: -prod -db /app/data/rpb.db -input 17 -output 27
+```
+
+All pin numbers are BCM (Broadcom) numbers, not physical board pin numbers.
+
+## Test in dummy mode first
+
+<Tip>
+Before connecting any hardware, start rpb without the `-prod` flag. The server uses a `DummyBackend` that simulates state changes in memory without touching any GPIO pins. This lets you verify your Docker setup, API calls, and authentication before you introduce real hardware into the loop.
+</Tip>
+
+When you are ready to activate the GPIO pins, add the `-prod` flag and restart the service. Without `-prod`, the relay will never fire — even if the hardware is fully wired.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Deploy rpb with Docker Compose and make your first API call.
+  </Card>
+  <Card title="GPIO pin configuration" icon="gear" href="/configuration/gpio-pins">
+    Change the default input and output pin assignments.
+  </Card>
+</CardGroup>

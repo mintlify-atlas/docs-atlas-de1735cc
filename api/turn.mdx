@@ -1,0 +1,75 @@
+---
+title: "POST /turn/{state} — turn desktop on or off"
+description: "POST /turn/{state} powers the desktop on or off, skips the press if already in that state, and blocks until the status LED confirms the transition."
+---
+
+Use `POST /turn/{state}` when you want to reach a specific power state without having to check the current state yourself. The endpoint reads the desktop's LED, skips the press if the desktop is already in the requested state, and blocks until the state change is confirmed or the press times out.
+
+**Method:** POST  
+**Path:** `/turn/{state}`  
+**Auth:** required
+
+## Path parameter
+
+<ParamField path="state" type="string" required>
+  The desired power state. Accepted values are `on` and `off` (case-insensitive). Any other value returns a 400 error.
+</ParamField>
+
+## Behavior
+
+- **No-op:** if the desktop is already in the requested state, the endpoint returns 200 with an empty body immediately — no relay activation occurs.
+- **State change:** the relay is pressed and the endpoint blocks, watching the LED for a state change.
+- **Timeout:** if the button auto-releases before the LED changes (e.g. the desktop ignored a short press), the endpoint returns 202 with the current state and the press record so you can decide what to do next.
+
+<Note>
+  This endpoint may take several seconds to respond while it waits for the LED to confirm the power transition. This is expected behavior.
+</Note>
+
+## Responses
+
+**200 OK** (no-op — already in desired state): empty body.
+
+**200 OK** (state changed successfully):
+
+```json
+{ "is_on": true }
+```
+
+**202 Accepted** (button timed out before state changed):
+
+```json
+{
+  "is_on": false,
+  "button_press": {
+    "number": 44,
+    "source": "myname",
+    "pressed_at": "2024-01-15T11:05:00Z",
+    "elapsed": 20.001,
+    "start_state": true,
+    "end_state": true
+  }
+}
+```
+
+A 202 means the relay fired but the LED did not change within the timeout period. The `is_on` field reflects the current observed state.
+
+## Errors
+
+| Code | Condition |
+|------|-----------|
+| 400 | `{state}` is not `on` or `off` |
+| 418 | The button is already pressed by another in-flight request |
+
+## Examples
+
+```bash
+# Turn the desktop on
+curl -X POST -u myname:mysecret http://<pi-ip>:5000/turn/on
+
+# Turn the desktop off
+curl -X POST -u myname:mysecret http://<pi-ip>:5000/turn/off
+```
+
+<Tip>
+  For a forced hard power-off (hold the button for 5 seconds), use `POST /press?t=5` instead. `POST /turn/off` performs a normal short press and relies on the OS responding to it.
+</Tip>

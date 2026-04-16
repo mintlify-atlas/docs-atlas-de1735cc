@@ -1,0 +1,76 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "Remote Power Button",
+  "projectDescription": "A Raspberry Pi-based HTTP service that lets you remotely control your desktop's power button from anywhere via a web interface or REST API.",
+  "theme": "aspen",
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "hardware-setup"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/options",
+              "configuration/authentication",
+              "configuration/gpio-pins"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/systemd",
+              "deployment/production"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/status",
+              "api/press",
+              "api/turn",
+              "api/history"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Remote power button control via HTTP REST API",
+    "Web UI with a clickable power button interface",
+    "Raspberry Pi GPIO control using go-rpio",
+    "Basic HTTP authentication with failed access logging",
+    "SQLite-backed press and state history with cursor-based pagination",
+    "Docker and systemd deployment support",
+    "Dummy backend for local development without hardware",
+    "Configurable GPIO input/output pins and press timeout"
+  ],
+  "publicApiSurface": [
+    "GET /status — current power state, press state, and last button press",
+    "POST /press — simulate pressing the power button (optional duration via ?t=)",
+    "POST /release — release the power button early",
+    "POST /turn/{state} — turn the desktop on or off explicitly",
+    "GET /press/history — paginated history of button presses",
+    "GET /state — current state (stub)",
+    "GET /state/history — state change history (stub)"
+  ]
+}

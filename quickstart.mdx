@@ -1,80 +1,112 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Get started with Remote Power Button"
+description: "Learn how to deploy Remote Power Button with Docker on a Raspberry Pi in five steps, from cloning the repo to verifying your first API call."
 ---
 
-## Get started in three steps
+Remote Power Button is easiest to run via Docker Compose. This guide assumes you have already wired your Raspberry Pi to the desktop's power button header and status LED — see [Hardware setup](/hardware-setup) if you haven't done that yet. By the end of this page, rpb will be running and you'll be able to press your desktop's power button remotely.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+  No hardware yet? You can still run rpb in **dummy mode** (without the `-prod` flag) to explore the API and web UI. The server will simulate state changes without touching any GPIO pins.
+</Note>
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- Raspberry Pi with Docker and Docker Compose installed
+- Relay wired to the desktop's power button header (output pin, default BCM 15)
+- Wire from the power LED header to a GPIO input pin (default BCM 14)
+- The Pi and your client machine on the same network (or Pi exposed to the internet)
 
-### Step 2: Deploy your changes
+## Deploy with Docker Compose
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/memsdm05/rpb.git
+    cd rpb
+    ```
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Create your environment file">
+    ```bash
+    cp .example.env .env
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Set your secret">
+    Open `.env` in a text editor and replace the placeholder with a strong password:
 
-### Step 3: Go live
+    ```bash .env
+    RPB_SECRET=your-strong-secret-here
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <Warning>
+      Do not leave `RPB_SECRET` as `<INSERT SECRET HERE>`. The server refuses to start with the placeholder value.
+    </Warning>
+  </Step>
+
+  <Step title="Start the server">
+    ```bash
+    docker compose up -d
+    ```
+
+    This builds the Go binary and starts the container. The server binds to port **5000** by default.
+
+    Check the logs to confirm startup:
+
+    ```bash
+    docker compose logs -f
+    ```
+
+    You should see `Server online` in the output.
+  </Step>
+
+  <Step title="Verify the server is running">
+    Send a request to `/status`. Use any string as the username — it becomes the "source" label in press history records.
+
+    ```bash
+    curl -u myname:your-strong-secret-here http://<pi-ip>:5000/status
+    ```
+
+    A successful response looks like:
+
+    ```json
+    {
+      "on": false,
+      "pressed": false,
+      "running_since": "2024-01-15T10:30:00.000Z",
+      "last_press": null
+    }
+    ```
+  </Step>
+</Steps>
+
+## Press the button
+
+Once the server is running, press the power button with a single API call:
+
+```bash
+curl -X POST -u myname:your-strong-secret-here http://<pi-ip>:5000/press
+```
+
+Or open `http://<pi-ip>:5000` in your browser — you'll see a power button UI. Your browser will prompt for credentials on the first visit.
+
+<Tip>
+  The username you provide in Basic Auth is recorded as the `source` field on every press. Use a descriptive name (like your name or device name) to make the press history meaningful.
+</Tip>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore all endpoints — press, release, turn on/off, and history.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/options">
+    Customize GPIO pins, timeout, bind address, and more.
+  </Card>
+  <Card title="Hardware setup" icon="microchip" href="/hardware-setup">
+    Wire the relay and status LED to your Raspberry Pi.
+  </Card>
+  <Card title="Systemd deployment" icon="server" href="/deployment/systemd">
+    Run rpb as a native Linux service without Docker.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

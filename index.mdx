@@ -1,97 +1,45 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Remote Power Button: control your desktop from anywhere"
+description: "Remote Power Button (rpb) is a self-hosted Go service that runs on a Raspberry Pi and lets you remotely press your desktop's power button over HTTP."
 ---
 
-## Setting up
+Remote Power Button (rpb) is a small Go service that runs on a Raspberry Pi and gives you full control over your desktop's power button from any network. Connect a relay to your motherboard's power button header and a wire to the status LED — then power cycle your PC from a browser or a single `curl` command, from anywhere in the world.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get rpb running with Docker in under five minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Hardware setup" icon="microchip" href="/hardware-setup">
+    Wire the Raspberry Pi relay and status LED to your desktop.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore every endpoint — press, release, turn on/off, and history.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Configuration" icon="gear" href="/configuration/options">
+    Customize GPIO pins, timeouts, bind address, and secrets.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## How it works
 
-Everything you need to create world-class documentation.
+rpb connects a Raspberry Pi to two points on your motherboard:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+- **Output pin** — drives a relay that shorts the power button header
+- **Input pin** — reads the power LED to detect whether the machine is on or off
 
-## Need inspiration?
+The Go server exposes an HTTP API protected by HTTP Basic Auth. Every press and state change is recorded to a local SQLite database so you have a full audit trail.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Steps>
+  <Step title="Wire the hardware">
+    Connect a relay to the power button header and a wire from the status LED to a GPIO input pin on your Raspberry Pi.
+  </Step>
+  <Step title="Set your secret">
+    Copy `.example.env` to `.env` and set `RPB_SECRET` to a strong password.
+  </Step>
+  <Step title="Run the server">
+    Start rpb with `docker compose up -d`. It binds to port **5000** by default.
+  </Step>
+  <Step title="Press the button">
+    Open `http://<pi-address>:5000` in your browser or call `POST /press` from anywhere.
+  </Step>
+</Steps>

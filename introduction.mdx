@@ -1,0 +1,43 @@
+---
+title: "What is Remote Power Button (rpb)?"
+description: "Remote Power Button uses a Raspberry Pi relay and GPIO to let you press your desktop's power button from any network via a REST API and web UI."
+---
+
+Remote Power Button (rpb) is a small Go service that runs on a Raspberry Pi and gives you full control over your desktop's power button from any network. It drives a relay connected to the power button header on your motherboard, reads the status LED to know whether the machine is on or off, and exposes a simple REST API and web UI so you can power cycle your PC from anywhere in the world.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get rpb running with Docker in under five minutes.
+  </Card>
+  <Card title="Hardware setup" icon="microchip" href="/hardware-setup">
+    Wire the Raspberry Pi relay and status LED to your desktop.
+  </Card>
+  <Card title="API reference" icon="code" href="/api/overview">
+    Explore every endpoint — press, release, turn on/off, and history.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/options">
+    Customize GPIO pins, timeouts, bind address, and secrets.
+  </Card>
+</CardGroup>
+
+## How it works
+
+rpb connects a Raspberry Pi to two points on your motherboard:
+
+- **Output pin** — drives a relay that shorts the power button header for as long as you hold it
+- **Input pin** — reads the power LED header to detect whether the machine is on or off
+
+The Go server exposes an HTTP API protected by HTTP Basic Auth. Every press and state change is recorded to a local SQLite database so you have a full audit trail of who pressed the button and when.
+
+A minimal browser UI is also bundled into the binary — open the server address in any browser to see the current state and press the button with a single click.
+
+## Key features
+
+- **REST API** — press, release, turn on/off, and query history over HTTP
+- **Web UI** — one-click power button in any browser, no app required
+- **GPIO control** — drives a relay via `go-rpio` on a Raspberry Pi
+- **State detection** — reads the power LED to know if the PC is on or off
+- **Audit log** — SQLite database records every press, release, and state change
+- **Basic Auth** — shared-secret authentication with failed-access logging
+- **Docker and systemd** — run as a container or a native Linux service
+- **Dev mode** — dummy backend lets you run and test without any hardware

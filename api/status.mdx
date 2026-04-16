@@ -1,0 +1,79 @@
+---
+title: "GET /status — power state and last press"
+description: "Returns the current power state of the desktop, whether the relay is active, the server start time, and the most recent ButtonPress record."
+---
+
+Use `GET /status` to check whether the desktop is on, whether the power button relay is currently being held, and to retrieve the last recorded button press. This is a safe, read-only endpoint useful for polling or dashboards.
+
+## Request
+
+**Method:** GET  
+**Path:** `/status`  
+**Auth:** required
+
+No query parameters or request body.
+
+## Response fields
+
+<ResponseField name="on" type="boolean">
+  `true` if the desktop is currently powered on, based on the status LED reading from the GPIO input pin.
+</ResponseField>
+
+<ResponseField name="pressed" type="boolean">
+  `true` if the relay is currently active — the button is being held down by an in-flight `/press` or `/turn` call.
+</ResponseField>
+
+<ResponseField name="running_since" type="string">
+  ISO 8601 UTC timestamp of when the rpb server process started.
+</ResponseField>
+
+<ResponseField name="last_press" type="object | null">
+  The most recent ButtonPress record, or `null` if no presses have occurred since the database was created.
+
+  <Expandable title="properties">
+    <ResponseField name="number" type="integer">
+      Database row ID.
+    </ResponseField>
+    <ResponseField name="source" type="string">
+      Basic Auth username of whoever triggered the press.
+    </ResponseField>
+    <ResponseField name="pressed_at" type="string">
+      ISO 8601 UTC timestamp of the press.
+    </ResponseField>
+    <ResponseField name="elapsed" type="float">
+      Duration the button was held, in seconds.
+    </ResponseField>
+    <ResponseField name="start_state" type="boolean">
+      Power state before the press.
+    </ResponseField>
+    <ResponseField name="end_state" type="boolean">
+      Power state after the press.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example
+
+```bash
+curl -u myname:mysecret http://<pi-ip>:5000/status
+```
+
+```json
+{
+  "on": true,
+  "pressed": false,
+  "running_since": "2024-01-15T10:30:00Z",
+  "last_press": {
+    "number": 42,
+    "source": "myname",
+    "pressed_at": "2024-01-15T10:35:00Z",
+    "elapsed": 0.5,
+    "start_state": false,
+    "end_state": true
+  }
+}
+```
+
+<Note>
+  In dev or dummy mode (no real GPIO), the `on` field toggles on each button release rather than reading a physical LED. The `last_press` field will be `null` on a freshly initialised server with no press history.
+</Note>

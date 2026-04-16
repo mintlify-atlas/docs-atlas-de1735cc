@@ -1,0 +1,134 @@
+---
+title: "Run Remote Power Button as a systemd service"
+description: "Build rpb from source, copy the binary, and install the included systemd unit file to run the server as a managed Linux service on your Raspberry Pi."
+---
+
+Running rpb as a systemd service is a lightweight alternative to Docker. You build a native binary, copy it to the system path, and let systemd manage the lifecycle — including automatic restarts and boot-time startup.
+
+## Prerequisites
+
+- Go 1.22 or later installed on your Raspberry Pi (needed to build from source)
+- `git` installed
+- The repository cloned: `git clone https://github.com/memsdm05/rpb.git && cd rpb`
+
+## Build and install
+
+<Steps>
+  <Step title="Build the binary">
+    CGO is required because rpb uses the `go-sqlite3` package:
+
+    ```bash
+    CGO_ENABLED=1 go build -o rpb .
+    ```
+  </Step>
+  <Step title="Copy the binary to the system path">
+    ```bash
+    sudo cp rpb /usr/local/bin/rpb
+    ```
+  </Step>
+  <Step title="Copy the service file">
+    ```bash
+    sudo cp rpb.service /etc/systemd/system/rpb.service
+    ```
+  </Step>
+  <Step title="Set your secret in the service file">
+    Open the service file and uncomment the `Environment` line, then set your secret:
+
+    ```bash
+    sudo nano /etc/systemd/system/rpb.service
+    ```
+
+    Change this line:
+
+    ```ini
+    #Environment="RPB_SECRET=<INSERT SECRET HERE>"
+    ```
+
+    To:
+
+    ```ini
+    Environment="RPB_SECRET=your-long-random-secret-here"
+    ```
+
+    <Warning>
+      Use a long, randomly generated string. Anyone who knows this secret can trigger your power button remotely.
+    </Warning>
+  </Step>
+  <Step title="Reload systemd">
+    After editing the service file, reload the daemon to pick up the change:
+
+    ```bash
+    sudo systemctl daemon-reload
+    ```
+  </Step>
+  <Step title="Enable the service on boot">
+    ```bash
+    sudo systemctl enable rpb
+    ```
+  </Step>
+  <Step title="Start the service">
+    ```bash
+    sudo systemctl start rpb
+    ```
+  </Step>
+  <Step title="Check the service status">
+    ```bash
+    sudo systemctl status rpb
+    ```
+  </Step>
+</Steps>
+
+## Service file reference
+
+```ini
+[Unit]
+Description=Remote Power Button v3
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=bnbro
+ExecStart=/usr/local/bin/rpb -prod
+#Environment="RPB_SECRET=<INSERT SECRET HERE>"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+<Note>
+  The `User=bnbro` line runs rpb as the `bnbro` user. Change this to your own username before reloading systemd.
+</Note>
+
+## GPIO device permissions
+
+The user running rpb needs read/write access to `/dev/gpiomem`. Add your user to the `gpio` group:
+
+```bash
+sudo usermod -aG gpio youruser
+```
+
+Log out and back in (or reboot) for the group change to take effect.
+
+## Passing the secret
+
+You have two options for providing `RPB_SECRET`:
+
+- **Environment line (recommended for systemd):** Uncomment and set `Environment="RPB_SECRET=..."` in the service file as shown above.
+- **Flag:** Pass `-secret yourvalue` directly in `ExecStart`. Note that flags passed this way may be visible in process listings (`ps aux`), so the environment variable approach is preferred.
+
+## Viewing logs
+
+Stream live logs with `journalctl`:
+
+```bash
+journalctl -u rpb -f
+```
+
+To view all logs since the last boot:
+
+```bash
+journalctl -u rpb -b
+```

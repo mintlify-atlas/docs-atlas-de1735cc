@@ -1,0 +1,113 @@
+---
+title: "Deploy Remote Power Button with Docker Compose"
+description: "Deploy rpb with Docker Compose for GPIO device passthrough, persistent SQLite storage, and automatic restarts on your Raspberry Pi."
+---
+
+Docker Compose is the recommended way to deploy rpb. It handles GPIO device passthrough, mounts the SQLite database to a persistent volume, and restarts the service automatically if it crashes or the Pi reboots.
+
+## Prerequisites
+
+- Docker and Docker Compose installed on your Raspberry Pi
+- The repo cloned locally (or transferred to the Pi)
+
+## Deployment steps
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/memsdm05/rpb.git && cd rpb
+    ```
+  </Step>
+  <Step title="Create your environment file">
+    Copy the example env file to create your own:
+
+    ```bash
+    cp .example.env .env
+    ```
+  </Step>
+  <Step title="Set your secret">
+    Open `.env` and replace the placeholder with a strong, random secret:
+
+    ```bash
+    RPB_SECRET=your-long-random-secret-here
+    ```
+
+    <Warning>
+      The secret is used for HTTP Basic Auth. Use a long, randomly generated string — anyone who knows it can trigger your power button.
+    </Warning>
+  </Step>
+  <Step title="Start the service">
+    ```bash
+    docker compose up -d
+    ```
+  </Step>
+  <Step title="Verify the container is running">
+    Stream logs to confirm startup:
+
+    ```bash
+    docker compose logs -f
+    ```
+  </Step>
+  <Step title="Test the endpoint">
+    ```bash
+    curl -u myname:mysecret http://localhost:5000/status
+    ```
+
+    Replace `myname` and `mysecret` with the username and `RPB_SECRET` value from your `.env`.
+  </Step>
+</Steps>
+
+## Understanding the compose configuration
+
+The `docker-compose.yml` is pre-configured for a production Raspberry Pi deployment:
+
+```yaml
+services:
+  server:
+    build: .
+    restart: unless-stopped
+    command: -prod -db /app/data/rpb.db
+    env_file: .env
+    ports:
+      - 5000:5000
+    volumes:
+      - ./data:/app/data
+      - /proc/device-tree/soc/ranges:/proc/device-tree/soc/ranges
+    devices:
+      - /dev/mem:/dev/mem
+      - /dev/gpiomem:/dev/gpiomem
+```
+
+| Key | Purpose |
+|---|---|
+| `restart: unless-stopped` | Automatically restarts on crash or Pi reboot, unless you explicitly stop the container |
+| `command: -prod -db /app/data/rpb.db` | Enables real GPIO control and writes the SQLite database to the persistent volume |
+| `./data:/app/data` | Persists the SQLite database across container restarts and image rebuilds |
+| `/dev/mem`, `/dev/gpiomem` | Grants the container direct access to GPIO hardware — required for physical button control |
+| `/proc/device-tree/soc/ranges` | Read by `go-rpio` at startup to detect the Raspberry Pi model and map GPIO addresses |
+| `5000:5000` | Exposes the HTTP server on port 5000 of the host |
+
+<Note>
+  The container must run on the Raspberry Pi itself. GPIO device passthrough (`/dev/mem`, `/dev/gpiomem`) does not work when Docker is running on a remote host.
+</Note>
+
+## Customizing the configuration
+
+**Change the listening port**
+
+To expose rpb on a different host port, update the `ports` mapping. The container always listens on `5000` internally:
+
+```yaml
+ports:
+  - 8080:5000
+```
+
+**Pass additional flags**
+
+Use the `command:` key to override the default flags. For example, to change the GPIO pins or the button press timeout:
+
+```yaml
+command: -prod -db /app/data/rpb.db -input 17 -output 18 -timeout 30s
+```
+
+See [Configuration](/configuration/options) for all available flags.

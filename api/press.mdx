@@ -1,0 +1,112 @@
+---
+title: "POST /press and /release — control the button"
+description: "POST /press activates the relay with an optional hold duration or blocking wait. POST /release cancels an active press and returns the ButtonPress record."
+---
+
+These two endpoints give you direct, low-level control over the power button relay. Use `/press` to activate the relay and `/release` to deactivate it before the automatic timeout fires.
+
+---
+
+## POST /press
+
+Activates the relay (presses the power button). By default the call returns immediately with a 202 and the relay stays active until the server timeout elapses or you call `/release`. Supply `?t=` to hold for a specific duration, or `?wait` to block until the press completes.
+
+**Method:** POST  
+**Path:** `/press`  
+**Auth:** required
+
+### Query parameters
+
+<ParamField query="t" type="float">
+  Duration in seconds to hold the button before auto-releasing. Must not exceed the server's configured timeout (default 20 s). Providing `?t` automatically implies `?wait` — the response blocks until the button is released.
+</ParamField>
+
+<ParamField query="wait" type="flag">
+  If present, the request blocks until the button is released and returns the full ButtonPress object. No value is needed — the presence of the parameter is sufficient.
+</ParamField>
+
+### Responses
+
+**202 Accepted** (default, no `?wait` or `?t`): press started, returns immediately.
+
+```json
+{ "timeout": 20.0 }
+```
+
+The `timeout` value is the maximum number of seconds the relay will stay active before auto-releasing.
+
+**200 OK** (with `?wait` or `?t`): press completed, returns the ButtonPress object.
+
+```json
+{
+  "number": 43,
+  "source": "myname",
+  "pressed_at": "2024-01-15T11:00:00Z",
+  "elapsed": 2.003,
+  "start_state": true,
+  "end_state": false
+}
+```
+
+### Errors
+
+| Code | Condition |
+|------|-----------|
+| 400 | `?t` value is not a valid number, or exceeds the server timeout |
+| 418 | The button is already pressed by another in-flight request |
+
+### Examples
+
+```bash
+# Quick press — returns 202 immediately, relay stays active
+curl -X POST -u myname:mysecret http://<pi-ip>:5000/press
+
+# Hold for 2 seconds, block until released
+curl -X POST -u myname:mysecret "http://<pi-ip>:5000/press?t=2"
+
+# Press and wait for release (manual or timeout)
+curl -X POST -u myname:mysecret "http://<pi-ip>:5000/press?wait"
+```
+
+---
+
+## POST /release
+
+Releases the relay early, before the automatic timeout fires. Returns the ButtonPress record for the press that was just terminated.
+
+**Method:** POST  
+**Path:** `/release`  
+**Auth:** required
+
+No query parameters or request body.
+
+### Response
+
+**200 OK**: the relay was active and has been released. Returns the ButtonPress object.
+
+```json
+{
+  "number": 43,
+  "source": "myname",
+  "pressed_at": "2024-01-15T11:00:00Z",
+  "elapsed": 0.847,
+  "start_state": true,
+  "end_state": false
+}
+```
+
+### Errors
+
+| Code | Condition |
+|------|-----------|
+| 418 | The button is not currently pressed |
+
+### Example
+
+```bash
+curl -X POST -u myname:mysecret http://<pi-ip>:5000/release
+```
+
+<Warning>
+  Calling `/release` when nothing is pressed returns a 418. Check `/status` first if you are unsure whether the relay is active.
+</Warning>

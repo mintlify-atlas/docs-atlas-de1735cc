@@ -1,0 +1,80 @@
+---
+title: "REST API overview for Remote Power Button"
+description: "Base URL, HTTP Basic Auth setup, error envelope, status codes, and the shared ButtonPress object used across all Remote Power Button endpoints."
+---
+
+The Remote Power Button (rpb) service exposes a small HTTP API that lets you check desktop power state, press or release the physical power button relay, and retrieve a full press history — all over your local network from any HTTP client.
+
+## Base URL
+
+```
+http://<pi-address>:5000
+```
+
+No trailing slash. HTTPS is not provided natively; add a reverse proxy if you need TLS.
+
+## Authentication
+
+Every endpoint requires HTTP Basic Auth. Set the password to the value of `RPB_SECRET` configured on the server (compared via SHA-256). The username can be any string — it is recorded as the `source` field on every press record, so use something meaningful like your name or the calling script's name.
+
+```bash
+curl -u myname:mysecret http://<pi-ip>:5000/status
+```
+
+On a successful request the server adds a `Press-Timeout` response header containing the configured button timeout. The value uses the format `%f.2f` (e.g. `20.000000.2f` for a 20-second timeout).
+
+## Response format
+
+All responses are `application/json`. Errors follow a consistent envelope:
+
+```json
+{ "error": "message describing what went wrong" }
+```
+
+### Common status codes
+
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 202 | Accepted (async — press started, not yet released) |
+| 400 | Bad request (invalid parameter value) |
+| 401 | Unauthorized (wrong or missing credentials) |
+| 418 | Button state conflict (already pressed, or not pressed) |
+
+## The ButtonPress object
+
+Several endpoints return a `ButtonPress` object representing a single relay activation. The fields are:
+
+<ResponseField name="number" type="integer">
+  Database row ID. Omitted when zero (press not yet persisted).
+</ResponseField>
+
+<ResponseField name="source" type="string">
+  Who triggered the press — taken from the Basic Auth username.
+</ResponseField>
+
+<ResponseField name="pressed_at" type="string">
+  ISO 8601 UTC timestamp of when the button was pressed.
+</ResponseField>
+
+<ResponseField name="elapsed" type="float">
+  How long the button was held, in seconds.
+</ResponseField>
+
+<ResponseField name="start_state" type="boolean">
+  Whether the desktop was powered on immediately before the press.
+</ResponseField>
+
+<ResponseField name="end_state" type="boolean">
+  Whether the desktop was powered on immediately after the press.
+</ResponseField>
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /status | Current power state |
+| POST | /press | Press the button |
+| POST | /release | Release the button |
+| POST | /turn/{state} | Turn desktop on or off |
+| GET | /press/history | Paginated press history |

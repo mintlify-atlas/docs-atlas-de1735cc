@@ -1,0 +1,89 @@
+---
+title: "Configuration options for the rpb server"
+description: "Complete reference for all CLI flags accepted by the rpb server, including the RPB_SECRET env var, GPIO pins, bind address, timeout, and production mode."
+---
+
+rpb is configured entirely through CLI flags passed at startup. The only value that can also be supplied as an environment variable is the shared secret (`-secret` / `RPB_SECRET`). All other settings must be passed as flags. If a required value is missing, the server exits immediately with an error.
+
+## How configuration works
+
+When rpb starts, it reads flags from the command line. The `-secret` flag is the only option that falls back to an environment variable: if you omit `-secret`, rpb checks `RPB_SECRET`. If neither is set (or the value is the placeholder `<INSERT SECRET HERE>`), the server refuses to start.
+
+<Note>
+  CLI flags always take priority over the environment variable. If you pass `-secret` on the command line, `RPB_SECRET` is ignored.
+</Note>
+
+## All configuration flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-secret` | (required) | Shared password for HTTP Basic Auth. Also reads from `RPB_SECRET` env var if the flag is omitted. |
+| `-db` | `./rpb.db` | Path to the SQLite database file used to store press history and failed access logs. |
+| `-addr` | `:5000` | Address and port the HTTP server binds to. |
+| `-input` | `14` | BCM GPIO pin number used to read the power LED state (input). |
+| `-output` | `15` | BCM GPIO pin number used to drive the relay (output). |
+| `-prod` | `false` | Enable real GPIO control. Required when hardware is connected. |
+| `-timeout` | `20s` | Maximum duration a button press is held before it is auto-released. |
+
+## Development vs. production mode
+
+Without `-prod`, rpb uses a dummy backend that simulates GPIO without touching any hardware. This lets you run and test the server on any machine.
+
+<Note>
+  Always pass `-prod` on the Raspberry Pi. Without it, pressing the button has no effect on the connected desktop.
+</Note>
+
+## Configuring with Docker Compose
+
+Pass flags via the `command:` key in your `docker-compose.yml`. The example below enables production mode, sets a custom database path, and adjusts the bind address:
+
+```yaml docker-compose.yml
+services:
+  server:
+    build: .
+    restart: unless-stopped
+    command: -prod -db /app/data/rpb.db -addr :5000
+    env_file: .env
+    ports:
+      - 5000:5000
+    volumes:
+      - ./data:/app/data
+      - /proc/device-tree/soc/ranges:/proc/device-tree/soc/ranges
+    devices:
+      - /dev/mem:/dev/mem
+      - /dev/gpiomem:/dev/gpiomem
+```
+
+Set `RPB_SECRET` in your `.env` file (copied from `.example.env`):
+
+```bash .env
+RPB_SECRET=your-strong-secret-here
+```
+
+## Configuring with the systemd service
+
+Edit `/etc/systemd/system/rpb.service` and add flags to `ExecStart`. You can either supply the secret via the `Environment=` directive or rely on a separate secret manager:
+
+```ini rpb.service
+[Unit]
+Description=Remote Power Button v3
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=bnbro
+ExecStart=/usr/local/bin/rpb -prod -timeout 30s
+Environment="RPB_SECRET=your-strong-secret-here"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+After editing the unit file, reload and restart the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rpb
+```

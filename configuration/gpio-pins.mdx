@@ -1,0 +1,81 @@
+---
+title: "GPIO pin configuration for the power button"
+description: "How rpb uses two BCM GPIO pins to read the power LED and drive the relay, with defaults, behavior, and instructions for changing pin assignments."
+---
+
+rpb uses two GPIO pins on the Raspberry Pi: one to read whether the desktop is powered on, and one to activate the relay that simulates a physical button press. Both pins are configured using BCM (Broadcom) numbers, not physical board pin numbers.
+
+## The two pins
+
+| Role | Flag | Default BCM | Direction | Behavior |
+|------|------|-------------|-----------|----------|
+| Input | `-input` | 14 | Input | Reads High when the desktop power LED is on |
+| Output | `-output` | 15 | Output | Driven High to press the button, Low to release |
+
+### Input pin (power LED reader)
+
+The input pin is configured as a digital input with a software pull-up resistor. It reads `High` when the desktop is powered on and `Low` when it is off.
+
+<Note>
+  The software pull-up means no external resistor is needed on the wire connected to the status LED. You can wire the LED tap directly to the GPIO pin.
+</Note>
+
+### Output pin (relay driver)
+
+The output pin starts `Low` at initialization. When you trigger a button press, rpb drives it `High` to activate the relay (closing the circuit across the power button header). It returns `Low` to release.
+
+## BCM pin numbering
+
+rpb uses the [go-rpio](https://github.com/stianeikeland/go-rpio) library, which expects **BCM (Broadcom) GPIO numbers** — not the physical pin numbers printed on the board header.
+
+<Warning>
+  Do not confuse BCM numbers with physical header pin numbers. BCM 14 is physical pin 8, and BCM 15 is physical pin 10. Always use a Raspberry Pi BCM pinout diagram to map between the two numbering schemes.
+</Warning>
+
+<Tip>
+  Search for "Raspberry Pi GPIO pinout BCM" or visit [pinout.xyz](https://pinout.xyz) to find the BCM number for any physical header pin on your board.
+</Tip>
+
+## Changing the default pins
+
+Pass the `-input` and `-output` flags with integer BCM pin numbers to override the defaults:
+
+```bash
+./rpb -prod -input 17 -output 27
+```
+
+### Docker Compose example
+
+Override the `command:` key to pass custom pin numbers:
+
+```yaml docker-compose.yml
+services:
+  server:
+    build: .
+    restart: unless-stopped
+    command: -prod -db /app/data/rpb.db -input 17 -output 27
+    env_file: .env
+    ports:
+      - 5000:5000
+    volumes:
+      - ./data:/app/data
+      - /proc/device-tree/soc/ranges:/proc/device-tree/soc/ranges
+    devices:
+      - /dev/mem:/dev/mem
+      - /dev/gpiomem:/dev/gpiomem
+```
+
+### Systemd example
+
+```ini rpb.service
+[Service]
+ExecStart=/usr/local/bin/rpb -prod -input 17 -output 27
+```
+
+## Development mode and GPIO
+
+GPIO pins are only initialized when `-prod` is passed. Without that flag, rpb uses a dummy backend and never touches the hardware. This means you can run and test the server on a non-Pi machine without any GPIO errors.
+
+<Note>
+  If you run without `-prod` on the actual Raspberry Pi, the server starts successfully but button presses have no hardware effect.
+</Note>

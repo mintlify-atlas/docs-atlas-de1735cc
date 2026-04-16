@@ -1,0 +1,93 @@
+---
+title: "GET /press/history — paginated press log"
+description: "Returns a cursor-paginated list of ButtonPress records from the SQLite database, ordered by ID ascending, with a maximum page size of 10."
+---
+
+Use `GET /press/history` to retrieve a full audit log of every button press recorded in the SQLite database. Results are ordered by row ID ascending and paginated using an integer cursor so you can walk through the entire history page by page.
+
+**Method:** GET  
+**Path:** `/press/history`  
+**Auth:** required
+
+## Query parameters
+
+<ParamField query="limit" type="integer" default="10">
+  Number of records to return per page. The server caps this endpoint at a maximum of 10 regardless of the value you supply.
+</ParamField>
+
+<ParamField query="cursor" type="integer" default="0">
+  Row ID to start from. Pass the `next_cursor` value from the previous response to advance to the next page. Omit (or pass `0`) to start from the beginning.
+</ParamField>
+
+## Response fields
+
+<ResponseField name="items" type="ButtonPress[]">
+  Array of ButtonPress records for this page.
+
+  <Expandable title="ButtonPress properties">
+    <ResponseField name="number" type="integer">
+      Database row ID.
+    </ResponseField>
+    <ResponseField name="source" type="string">
+      Basic Auth username of whoever triggered the press.
+    </ResponseField>
+    <ResponseField name="pressed_at" type="string">
+      ISO 8601 UTC timestamp of the press.
+    </ResponseField>
+    <ResponseField name="elapsed" type="float">
+      Duration the button was held, in seconds.
+    </ResponseField>
+    <ResponseField name="start_state" type="boolean">
+      Power state before the press.
+    </ResponseField>
+    <ResponseField name="end_state" type="boolean">
+      Power state after the press.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="limit" type="integer">
+  The `limit` value used for this page (after server-side capping).
+</ResponseField>
+
+<ResponseField name="cursor" type="integer">
+  The `cursor` value used for this page.
+</ResponseField>
+
+<ResponseField name="next_cursor" type="integer | null">
+  Cursor to pass in the next request to retrieve the following page. `null` when there are no more records.
+</ResponseField>
+
+## Example response
+
+```json
+{
+  "items": [
+    {
+      "number": 1,
+      "source": "myname",
+      "pressed_at": "2024-01-15T10:35:00Z",
+      "elapsed": 0.512,
+      "start_state": false,
+      "end_state": true
+    }
+  ],
+  "limit": 10,
+  "cursor": 0,
+  "next_cursor": 11
+}
+```
+
+## Pagination example
+
+```bash
+# First page
+curl -u myname:mysecret "http://<pi-ip>:5000/press/history?limit=10"
+
+# Next page — use next_cursor=11 from the response above
+curl -u myname:mysecret "http://<pi-ip>:5000/press/history?limit=10&cursor=11"
+```
+
+<Note>
+  When `next_cursor` is `null`, you have reached the last page and there are no more records to fetch.
+</Note>
